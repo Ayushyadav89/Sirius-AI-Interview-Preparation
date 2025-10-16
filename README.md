@@ -1,94 +1,80 @@
-# Sirius AI – Interview Practice Platform
+# 🚀 Sirius.AI – Intelligent Interview Preparation Platform
 
-- Sirius AI is an intelligent interview preparation platform that generates personalized interview sessions based on a user’s background and preferences. With the power of Gemini AI, it provides 20+ tailored interview questions for practice, helping users get ready for real-world technical and behavioral interviews.
+Sirius.AI is an **AI-powered Interview Preparation Platform** designed to help students and professionals enhance their technical and behavioral interview skills.  
+It offers **real-time interview simulations**, **AI-driven question analysis**, **performance feedback**, and **personalized learning insights** — all in one place.
 
-## 🚀 Features
+---
+- Live Link - [sirius.ai](https://sirius-ai.onrender.com/)
 
-- Interactive Dashboard – Clean and simple interface for managing interview sessions.
+## 🧠 Features
 
-- Custom Session Creation – Users can create an interview session by entering:
+### 💬 AI-Powered Interview Simulation
+- Real-time **mock interviews** with AI-based evaluators.
+- Intelligent follow-up questions based on your answers.
+- Automatic scoring on communication, confidence, and accuracy.
 
-- Experience level (e.g., Fresher, 2+ years, 5+ years)
+### 📈 Performance Analytics
+- Detailed performance reports with topic-wise strengths and weaknesses.
+- AI-generated feedback for continuous improvement.
 
-- Role (e.g., Software Engineer, Data Analyst, Backend Developer)
+### 💻 Technical Practice
+- Practice **DSA**, **System Design**, and **Core CS** questions.
+- Access categorized problem sets based on difficulty level.
 
-- Technology (e.g., Java, React, Python, Machine Learning)
+### 🧍 HR & Behavioral Rounds
+- Get common **HR interview questions** with smart answer suggestions.
+- Learn best practices for introductions, situational questions, and team scenarios.
 
-- AI-Powered Question Generation – Uses Gemini AI to generate 20+ unique interview questions.
+### 🌐 Multi-role Interview Prep
+- Specialized tracks for **Frontend Developers**, **Backend Developers**, **Data Scientists**, and **Machine Learning Engineers**.
 
-- Question Categories – Covers technical, problem-solving, behavioral, and role-specific domains.
+---
 
-- Practice Mode – Users can attempt questions in a structured format for self-assessment.
+## 🧩 Tech Stack
 
-## 🛠️ Tech Stack
+### **Frontend**
+- ⚛️ React.js  
+- 🎨 Tailwind CSS  
+- 🔗 Axios for API communication  
 
-- Frontend: React.js(for dashboard & UI)
+### **Backend**
+- 🟩 Node.js with Express  
+- 🗄️ MongoDB (Mongoose ORM)  
+- 🔒 JWT Authentication  
+- 🧠 OpenAI API for AI-powered features  
 
-- Backend: Node.js + Express.js
-
-- Database: MongoDB
-
-- AI Integration: Google Gemini API (for dynamic question generation)
-
-- Styling: Tailwind CSS 
-
-## 📦 Installation & Setup
-
-1. Clone the repository
-
-- git clone https://github.com/your-username/sirius-ai.git
-- cd sirius-ai
+---
 
 
-2. Install dependencies
+## ⚙️ Setup Instructions
+- git clone https://github.com/Ayushyadav89/Sirius-AI-Interview-Preparation.git
+- cd Sirius-AI-Interview-Preparation
 
+## Setup Backend
+
+### cd backend
 - npm install
+- npm start
 
 
-4. Set up environment variables
-- Create a .env file in the root folder and configure:
+### cd ../frontend
+- npm install
+- npm run start
 
-- GEMINI_API_KEY=your_gemini_api_key
-- DATABASE_URL=your_database_url
-- PORT=5000
+## 📚 Future Enhancements
 
+- Integration of voice-based interviews.
 
-5. Run the project
+- Personalized Learning Roadmaps.
 
-- npm run dev
-
-## 📖 Usage
-
-- Open the dashboard in your browser.
-
-- Enter your Experience, Role, and Technology to create a session.
-
-- Click Generate Questions.
-
-- Gemini AI will provide 20+ role-specific interview questions.
-
-- Start practicing and track your progress.
-
-## 🔮 Future Enhancements
-
-- Add answer suggestions & explanations using Gemini.
-
-- Implement mock interview mode with timer and scoring.
-
-- Support multi-session history & analytics.
-
-- Integration with speech-to-text for live practice.
-
-- Export questions & answers to PDF / Docs for offline revision.
-
-## 🤝 Contributing
-
-- Contributions are welcome! Feel free to open an issue or submit a pull request for new features, bug fixes, or improvements.
+- Mobile App.
 
 ## 📜 License
 
-
-- This project is licensed under the MIT License – free to use, modify, and distribute.
-
+- This project is licensed under the MIT License — feel free to use and modify.
 
 
+## Contact
+- NAME - AYUSH YADAV
+- EMAIL - ayushyadav01022004@gmail.com
+- LinkedIn - [Linkedin](https://www.linkedin.com/in/ayush-yadav-143536253/)
