@@ -24,10 +24,12 @@ const generateInterviewQuestions = async (req, res) => {
       numberOfQuestions
     );
 
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash-lite",
+      contents: prompt,
+    });
 
-    let rawText = result.response.text();
+     let rawText = response.text;
 
     // Clean it: Remove `json and from beginning and end
     const cleanedText = rawText
@@ -60,10 +62,12 @@ const generateConceptExplanation = async (req, res) => {
 
     const prompt = conceptExplainPrompt(question);
 
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-
-    let rawText = result.response.text();
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash-lite",
+      contents: prompt,
+    });
+    
+    let rawText = response.text;
 
     // Clean it: Remove ``` json and ``` from beginning and end
     const cleanedText = rawText
