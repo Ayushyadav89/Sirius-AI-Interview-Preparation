@@ -11,6 +11,9 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 // @access Private
 const generateInterviewQuestions = async (req, res) => {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ message: "AI service not configured" });
+    }
     const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
 
     if (!role || !experience || !topicsToFocus || !numberOfQuestions) {
@@ -30,14 +33,25 @@ const generateInterviewQuestions = async (req, res) => {
 
     let rawText = result.response.text();
 
-    // Clean it: Remove `json and from beginning and end
-    const cleanedText = rawText
-      .replace(/^```json\s*/, "") // remove starting ```json
-      .replace(/```$/, "") // remove ending ```
+    // Clean it: Remove markdown code blocks
+    let cleanedText = rawText
+      .replace(/^```(?:json)?\s*/, "") // remove starting ``` or ```json
+      .replace(/```\s*$/, "") // remove ending ```
       .trim(); // remove extra spaces
+
+    // Try to find JSON if there are extra texts
+    const jsonMatch = cleanedText.match(/\[[\s\S]*\]/) || cleanedText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleanedText = jsonMatch[0];
+    }
 
     // Now safe to parse
     const data = JSON.parse(cleanedText);
+
+    // Ensure it's an array
+    if (!Array.isArray(data)) {
+      throw new Error("AI response is not a valid array");
+    }
 
     res.status(200).json(data);
   } catch (error) {
