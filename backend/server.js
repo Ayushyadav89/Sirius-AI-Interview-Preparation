@@ -31,6 +31,60 @@ app.get('/', (req, res) => {
   res.send('API is running!');
 });
 
+// Debug endpoint to test Gemini API
+app.get('/api/debug/test-gemini', (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const hasKey = !!apiKey;
+  const keyPreview = apiKey ? `${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length - 5)}` : "NOT SET";
+  
+  res.json({
+    message: "Gemini API Debug",
+    apiKeyConfigured: hasKey,
+    keyPreview: keyPreview,
+    environment: process.env.NODE_ENV || "development",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Test endpoint to actually call Gemini
+app.post('/api/debug/test-gemini-call', async (req, res) => {
+  try {
+    console.log("Testing Gemini API call...");
+    
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({ error: "GEMINI_API_KEY not configured" });
+    }
+
+    const { GoogleGenerativeAI } = require("@google/generative-ai");
+    const testAI = new GoogleGenerativeAI(apiKey);
+    const model = testAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    console.log("Making test request to Gemini API...");
+    const result = await model.generateContent("Say 'Hello' and nothing else.");
+    
+    console.log("Result received:", result ? "Yes" : "No");
+    console.log("Response:", result.response ? "Yes" : "No");
+    
+    const text = result.response.text();
+    
+    res.json({
+      success: true,
+      message: "Gemini API is working!",
+      response: text,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Gemini API test error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      errorType: error.constructor.name,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
 // Routes
 app.use("/api/auth", authRoutes);
 app.use('/api/sessions', sessionRoutes);
