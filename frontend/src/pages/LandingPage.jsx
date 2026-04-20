@@ -37,7 +37,7 @@ const LandingPage = () => {
           {/* Header - unchanged */}
           <header className="flex justify-between items-center mb-16">
             <div className="text-xl text-black font-bold">
-              Sirius.ai
+              Ava Learn
             </div>
             {user ? (
               <ProfileInfoCard />
