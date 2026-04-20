@@ -4,7 +4,14 @@ const {
   questionAnswerPrompt,
 } = require("../utils/prompts");
 
-const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize AI only if API key is available
+let ai = null;
+const initializeAI = () => {
+  if (!ai && process.env.GEMINI_API_KEY) {
+    ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  }
+  return ai;
+};
 
 // Helper function to extract and parse JSON from text
 const parseJsonResponse = (text) => {
@@ -78,6 +85,12 @@ const generateInterviewQuestions = async (req, res) => {
       return res.status(500).json({ message: "AI service not configured" });
     }
 
+    const aiInstance = initializeAI();
+    if (!aiInstance) {
+      console.error("Failed to initialize AI");
+      return res.status(500).json({ message: "AI service not available" });
+    }
+
     const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
     console.log("Request params:", { role, experience, topicsToFocus, numberOfQuestions });
 
@@ -93,7 +106,7 @@ const generateInterviewQuestions = async (req, res) => {
     );
     console.log("Generated prompt length:", prompt.length);
 
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = aiInstance.getGenerativeModel({ model: "gemini-1.5-flash" });
     console.log("Model initialized");
 
     const result = await model.generateContent(prompt);
@@ -163,10 +176,21 @@ const generateConceptExplanation = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY not configured");
+      return res.status(500).json({ message: "AI service not configured" });
+    }
+
+    const aiInstance = initializeAI();
+    if (!aiInstance) {
+      console.error("Failed to initialize AI");
+      return res.status(500).json({ message: "AI service not available" });
+    }
+
     const prompt = conceptExplainPrompt(question);
     console.log("Generated prompt length:", prompt.length);
 
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = aiInstance.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const result = await model.generateContent(prompt);
     console.log("Response received:", result ? "Yes" : "No");
