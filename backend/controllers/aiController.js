@@ -13,14 +13,12 @@ const initializeAI = () => {
   return ai;
 };
 
-// Helper function to add timeout to promises
-const withTimeout = (promise, timeoutMs = 30000) => {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`API call timed out after ${timeoutMs}ms`)), timeoutMs)
-    )
-  ]);
+// Helper: wraps a promise with a timeout
+const withTimeout = (promise, ms) => {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`Request timed out after ${ms}ms`)), ms)
+  );
+  return Promise.race([promise, timeout]);
 };
 
 // Helper function to extract and parse JSON from text
@@ -31,79 +29,85 @@ const parseJsonResponse = (text) => {
 
   // Remove markdown code blocks
   let cleanedText = text
-    .replace(/^```(?:json)?\s*/gm, "") // remove starting ``` or ```json
-    .replace(/```\s*$/gm, "") // remove ending ```
+    .replace(/^```(?:json)?\s*/gm, "")
+    .replace(/```\s*$/gm, "")
     .trim();
 
-  // Try parsing the cleaned text first
   try {
-    const data = JSON.parse(cleanedText);
-    return data;
+    return JSON.parse(cleanedText);
   } catch (directParseError) {
     console.log("Direct parse failed, attempting to extract JSON...");
   }
 
-  // If direct parsing fails, try to extract JSON more carefully
-  let jsonMatch = null;
-  
   // Try to find array first (for questions)
   const arrayMatch = cleanedText.match(/\[\s*\{[\s\S]*?\}\s*(?:,\s*\{[\s\S]*?\}\s*)*\]/);
   if (arrayMatch) {
-    jsonMatch = arrayMatch[0];
-  }
-  
-  // If no array found, try to find object (for explanations)
-  if (!jsonMatch) {
-    const objectMatch = cleanedText.match(/\{\s*"[\s\S]*?\s*\}/);
-    if (objectMatch) {
-      jsonMatch = objectMatch[0];
-    }
-  }
-  
-  if (jsonMatch) {
     try {
-      const data = JSON.parse(jsonMatch);
-      return data;
-    } catch (matchParseError) {
-      console.error("Failed to parse extracted JSON:", jsonMatch);
-      throw new Error(`Invalid JSON extracted: ${matchParseError.message}`);
-    }
+      return JSON.parse(arrayMatch[0]);
+    } catch (_) {}
   }
 
-  // If still no match, throw detailed error
+  // Try to find object (for explanations)
+  const objectMatch = cleanedText.match(/\{\s*"[\s\S]*?\s*\}/);
+  if (objectMatch) {
+    try {
+      return JSON.parse(objectMatch[0]);
+    } catch (_) {}
+  }
+
   console.error("Could not extract valid JSON from response:", cleanedText.substring(0, 500));
   throw new Error(`Could not extract valid JSON from AI response. Response: ${cleanedText.substring(0, 200)}`);
 };
 
 // Helper to check for blocked content
 const checkResponseValidity = (result) => {
-  if (!result) {
-    throw new Error("No result from API");
-  }
+  if (!result) throw new Error("No result from API");
 
-  // Check for blocked content or safety issues
   if (result.promptFeedback?.blockReason) {
     throw new Error(`Request blocked by Google: ${result.promptFeedback.blockReason}`);
   }
 
-  // Check if candidates exist
   if (!result.candidates || result.candidates.length === 0) {
     throw new Error("No candidates in response - possible content filter");
   }
 
   const candidate = result.candidates[0];
-  
-  // Check for content filter reasons
+
   if (candidate.finishReason && candidate.finishReason !== "STOP") {
-    throw new Error(`Response incomplete (finishReason: ${candidate.finishReason}). This might indicate the content was filtered or the response was truncated.`);
+    throw new Error(`Response incomplete (finishReason: ${candidate.finishReason}).`);
   }
 
-  // Check if content is blocked
   if (candidate.content?.parts?.length === 0) {
-    throw new Error("Response content is empty (content might be blocked by Google's safety filters)");
+    throw new Error("Response content is empty (possibly blocked by safety filters)");
   }
 
   return true;
+};
+
+// Ordered list of current, available Gemini models to try
+const GEMINI_MODELS = [
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
+];
+
+// Returns a working model instance
+const getWorkingModel = async (aiInstance) => {
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      console.log(`Trying model: ${modelName}`);
+      const model = aiInstance.getGenerativeModel({ model: modelName });
+      // Quick probe to confirm availability
+      await withTimeout(model.generateContent("ping"), 8000);
+      console.log(`✓ Using model: ${modelName}`);
+      return model;
+    } catch (err) {
+      console.log(`✗ ${modelName} unavailable: ${err.message}`);
+    }
+  }
+  throw new Error(
+    "No suitable Gemini model found. Check your API key permissions at https://aistudio.google.com/apikey"
+  );
 };
 
 // @desc Generate interview questions and answers using Gemini
@@ -112,15 +116,13 @@ const checkResponseValidity = (result) => {
 const generateInterviewQuestions = async (req, res) => {
   try {
     console.log("=== Generate Questions Request ===");
-    
+
     if (!process.env.GEMINI_API_KEY) {
-      console.error("GEMINI_API_KEY not configured");
       return res.status(500).json({ message: "AI service not configured" });
     }
 
     const aiInstance = initializeAI();
     if (!aiInstance) {
-      console.error("Failed to initialize AI");
       return res.status(500).json({ message: "AI service not available" });
     }
 
@@ -131,81 +133,26 @@ const generateInterviewQuestions = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const prompt = questionAnswerPrompt(
-      role,
-      experience,
-      topicsToFocus,
-      numberOfQuestions
-    );
+    const prompt = questionAnswerPrompt(role, experience, topicsToFocus, numberOfQuestions);
     console.log("Generated prompt length:", prompt.length);
 
-    // Try gemini-2.0-flash-exp first, fallback to gemini-pro if not available
-    let model;
-    let modelName = "gemini-2.0-flash-exp";
-    
-    try {
-      model = aiInstance.getGenerativeModel({ model: modelName });
-      // Try to get a response to test if model is available
-      console.log("Attempting to use", modelName);
-    } catch (modelError) {
-      console.log(`${modelName} not available, switching to gemini-pro`);
-      modelName = "gemini-pro";
-      model = aiInstance.getGenerativeModel({ model: modelName });
-    }
-    console.log("Model initialized:", modelName);
+    const model = await getWorkingModel(aiInstance);
+    const result = await withTimeout(model.generateContent(prompt), 30000);
 
-    let result;
-    try {
-      result = await withTimeout(model.generateContent(prompt), 30000);
-    } catch (timeoutError) {
-      // If model not found, try gemini-pro as fallback
-      if (timeoutError.message.includes("not found") && modelName !== "gemini-pro") {
-        console.log(`${modelName} failed, trying gemini-pro...`);
-        modelName = "gemini-pro";
-        model = aiInstance.getGenerativeModel({ model: modelName });
-        result = await withTimeout(model.generateContent(prompt), 30000);
-      } else {
-        console.error("Gemini API call timeout or failed:", timeoutError.message);
-        throw new Error(`Gemini API error: ${timeoutError.message}`);
-      }
-    }
-    
     console.log("Response received:", result ? "Yes" : "No");
-
-    // Validate response structure
     checkResponseValidity(result);
 
     if (!result.response) {
-      console.error("Invalid response structure:", result);
       throw new Error("No response from AI model");
     }
 
-    console.log("Response object keys:", Object.keys(result.response));
-    
-    let rawText = "";
-    try {
-      rawText = result.response.text();
-      console.log("Raw text length:", rawText.length);
-      console.log("Raw text preview:", rawText.substring(0, 200));
-    } catch (textError) {
-      console.error("Error getting text from response:", textError);
-      throw new Error(`Failed to extract text from response: ${textError.message}`);
-    }
+    const rawText = result.response.text();
+    console.log("Raw text length:", rawText.length);
 
     const data = parseJsonResponse(rawText);
-    console.log("Parsed data type:", Array.isArray(data) ? "array" : typeof data);
-    console.log("Data length/keys:", Array.isArray(data) ? data.length : Object.keys(data));
 
-    // Ensure it's an array
-    if (!Array.isArray(data)) {
-      throw new Error("AI response is not a valid array");
-    }
-
-    // Validate each item has question and answer
-    if (data.length === 0) {
-      throw new Error("AI response returned empty array");
-    }
-
+    if (!Array.isArray(data)) throw new Error("AI response is not a valid array");
+    if (data.length === 0) throw new Error("AI response returned empty array");
     if (data.some((item) => !item.question || !item.answer)) {
       throw new Error("AI response missing question or answer field");
     }
@@ -216,8 +163,7 @@ const generateInterviewQuestions = async (req, res) => {
     console.error("=== Error generating questions ===");
     console.error("Error type:", error.constructor.name);
     console.error("Error message:", error.message);
-    console.error("Full error:", error);
-    
+
     res.status(500).json({
       message: "Failed to generate questions",
       error: error.message,
@@ -226,13 +172,13 @@ const generateInterviewQuestions = async (req, res) => {
   }
 };
 
-// @desc Generate explains a interview question
+// @desc Explain an interview concept/question
 // @route POST /api/ai/generate-explanation
 // @access Private
 const generateConceptExplanation = async (req, res) => {
   try {
     console.log("=== Generate Explanation Request ===");
-    
+
     const { question } = req.body;
     console.log("Question:", question ? question.substring(0, 100) : "missing");
 
@@ -241,71 +187,33 @@ const generateConceptExplanation = async (req, res) => {
     }
 
     if (!process.env.GEMINI_API_KEY) {
-      console.error("GEMINI_API_KEY not configured");
       return res.status(500).json({ message: "AI service not configured" });
     }
 
     const aiInstance = initializeAI();
     if (!aiInstance) {
-      console.error("Failed to initialize AI");
       return res.status(500).json({ message: "AI service not available" });
     }
 
     const prompt = conceptExplainPrompt(question);
     console.log("Generated prompt length:", prompt.length);
 
-    // Try gemini-2.0-flash-exp first, fallback to gemini-pro if not available
-    let model;
-    let modelName = "gemini-2.0-flash-exp";
-    
-    try {
-      model = aiInstance.getGenerativeModel({ model: modelName });
-      console.log("Attempting to use", modelName);
-    } catch (modelError) {
-      console.log(`${modelName} not available, switching to gemini-pro`);
-      modelName = "gemini-pro";
-      model = aiInstance.getGenerativeModel({ model: modelName });
-    }
+    const model = await getWorkingModel(aiInstance);
+    const result = await withTimeout(model.generateContent(prompt), 30000);
 
-    let result;
-    try {
-      result = await withTimeout(model.generateContent(prompt), 30000);
-    } catch (timeoutError) {
-      // If model not found, try gemini-pro as fallback
-      if (timeoutError.message.includes("not found") && modelName !== "gemini-pro") {
-        console.log(`${modelName} failed, trying gemini-pro...`);
-        modelName = "gemini-pro";
-        model = aiInstance.getGenerativeModel({ model: modelName });
-        result = await withTimeout(model.generateContent(prompt), 30000);
-      } else {
-        console.error("Gemini API call timeout or failed:", timeoutError.message);
-        throw new Error(`Gemini API error: ${timeoutError.message}`);
-      }
-    }
-    
     console.log("Response received:", result ? "Yes" : "No");
-
-    // Validate response structure
     checkResponseValidity(result);
 
-    if (!result || !result.response) {
-      console.error("Invalid response structure:", result);
+    if (!result.response) {
       throw new Error("No response from AI model");
     }
 
-    let rawText = "";
-    try {
-      rawText = result.response.text();
-      console.log("Raw text length:", rawText.length);
-    } catch (textError) {
-      console.error("Error getting text from response:", textError);
-      throw new Error(`Failed to extract text from response: ${textError.message}`);
-    }
+    const rawText = result.response.text();
+    console.log("Raw text length:", rawText.length);
 
     const data = parseJsonResponse(rawText);
     console.log("Parsed data keys:", Object.keys(data));
 
-    // Validate structure
     if (!data.title || !data.explanation) {
       throw new Error("AI response missing title or explanation field");
     }
@@ -316,8 +224,7 @@ const generateConceptExplanation = async (req, res) => {
     console.error("=== Error generating explanation ===");
     console.error("Error type:", error.constructor.name);
     console.error("Error message:", error.message);
-    console.error("Full error:", error);
-    
+
     res.status(500).json({
       message: "Failed to generate explanation",
       error: error.message,
