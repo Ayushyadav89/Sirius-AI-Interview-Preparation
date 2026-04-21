@@ -46,17 +46,41 @@ const callGemini = async (prompt) => {
 
   const { GoogleGenerativeAI } = require("@google/generative-ai");
   const client = new GoogleGenerativeAI(apiKey);
-  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  const result = await model.generateContent(prompt);
+  // Allow overriding model via env, otherwise try common model names until one works
+  const preferred = process.env.GEMINI_MODEL;
+  const candidates = (preferred ? [preferred] : []).concat([
+    "gemini-1.5-flash",
+    "gemini-1.5",
+    "gemini-1.0",
+    "models/gemini-1.5-flash",
+    "models/gemini-1.5",
+    "text-bison-001",
+    "chat-bison",
+    "models/text-bison-001",
+  ]);
 
-  // SDK responses may expose a response.text() helper
-  const text = result?.response && typeof result.response.text === "function"
-    ? result.response.text()
-    : (result?.response?.text || "");
+  let lastError = null;
 
-  if (!text) throw new Error("No text content in Gemini response");
-  return text;
+  for (const name of candidates) {
+    try {
+      const model = client.getGenerativeModel({ model: name });
+      const result = await model.generateContent(prompt);
+
+      const text = result?.response && typeof result.response.text === "function"
+        ? result.response.text()
+        : (result?.response?.text || "");
+
+      if (text && text.trim()) return text;
+      // If empty, keep trying other candidates
+      lastError = new Error(`Empty response from model ${name}`);
+    } catch (err) {
+      lastError = err;
+      // try next candidate
+    }
+  }
+
+  throw lastError || new Error("No available Gemini model produced output");
 };
 
 // @desc Generate interview questions and answers using Claude
