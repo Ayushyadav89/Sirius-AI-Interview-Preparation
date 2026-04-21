@@ -46,6 +46,22 @@ app.get('/api/debug/test-gemini', (req, res) => {
   });
 });
 
+// Debug endpoint to list available Gemini models (helps pick a usable model)
+app.get('/api/debug/list-gemini-models', async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return res.status(400).json({ error: 'GEMINI_API_KEY not configured' });
+
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const client = new GoogleGenerativeAI(apiKey);
+    const list = await client.listModels();
+    return res.json({ success: true, models: list });
+  } catch (error) {
+    console.error('Error listing Gemini models:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Test endpoint to actually call Gemini
 app.post('/api/debug/test-gemini-call', async (req, res) => {
   try {
