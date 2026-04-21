@@ -79,8 +79,48 @@ const callGemini = async (prompt) => {
       // try next candidate
     }
   }
+  // If none of the candidate models worked, query available models and try one that supports generateContent
+  try {
+    const listResp = await client.listModels();
+    const models = listResp?.models || listResp?.model || listResp || [];
 
-  throw lastError || new Error("No available Gemini model produced output");
+    // normalize to array of objects with id/name
+    const modelInfos = Array.isArray(models) ? models : Object.values(models || {});
+
+    const available = [];
+    for (const m of modelInfos) {
+      const id = m?.name || m?.id || m?.model || (typeof m === 'string' ? m : undefined);
+      if (!id) continue;
+      const supported = m?.supportedMethods || m?.methods || m?.capabilities || [];
+      const supportsGenerate = Array.isArray(supported)
+        ? supported.includes('generateContent') || supported.includes('generate')
+        : false;
+      available.push({ id, supportsGenerate, raw: m });
+    }
+
+    // prefer any model that declares support for generateContent
+    const pick = available.find((a) => a.supportsGenerate) || available[0];
+    if (pick) {
+      try {
+        const model = client.getGenerativeModel({ model: pick.id });
+        const result = await model.generateContent(prompt);
+        const text = result?.response && typeof result.response.text === 'function'
+          ? result.response.text()
+          : (result?.response?.text || '');
+        if (text && text.trim()) return text;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    const names = available.map((a) => `${a.id}${a.supportsGenerate ? ' (supports generateContent)' : ''}`);
+    throw new Error(
+      `No usable Gemini model found. Tried candidates and listModels results. Available models: ${names.slice(0,20).join(', ')}`
+    );
+  } catch (err) {
+    // Prefer the last SDK error if present, otherwise the listModels error
+    throw lastError || err || new Error('No available Gemini model produced output');
+  }
 };
 
 // @desc Generate interview questions and answers using Claude
