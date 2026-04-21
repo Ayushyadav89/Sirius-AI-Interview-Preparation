@@ -3,47 +3,60 @@ const questionAnswerPrompt = (
   experience,
   topicsToFocus,
   numberOfQuestions
-) => `
-  You are an AI trained to generate technical interview questions and answers.
+) => `You are an expert AI that generates technical interview questions and answers in STRICT JSON format ONLY.
 
-  Task:
-  - Role: ${role}
-  - Candidate Experience: ${experience} years
-  - Focus Topics: ${topicsToFocus}
-  - Write ${numberOfQuestions} interview questions.
-  - For each question, generate a detailed but beginner-friendly answer.
-  - If the answer needs a code example, add a small code block inside.
-  - Keep formatting very clean.
-  - Return a pure JSON array like:
-  [
-    {
-      "question": "Question here?",
-      "answer": "Answer here."
-    },
-    ...
-  ]
-  Important: Do NOT add any extra text. Only return valid JSON.
-`;
+CRITICAL: Output ONLY valid JSON array. NO explanations, NO markdown, NO extra text before or after.
 
-const conceptExplainPrompt = (question) => `
-  You are an AI trained to generate explanations for a given interview question.
+Generate exactly ${numberOfQuestions} interview questions with this information:
+- Role: ${role}
+- Candidate Experience: ${experience} years
+- Focus Topics: ${topicsToFocus}
 
-  Task:
+Each question should have:
+1. A clear, concise question
+2. A detailed, beginner-friendly answer
+3. Code examples if relevant (inline in the answer)
 
-  - Explain the following interview question and its concept in depth as if you're teaching a beginner developer.
-  - Question: "${question}"
-  - After the explanation, provide a short and clear title that summarizes the concept for the article or page header.
-  - If the explanation includes a code example, provide a small code block.
-  - Keep the formatting very clean and clear.
-  - Return the result as a valid JSON object in the following format:
-
+OUTPUT FORMAT (VALID JSON ARRAY ONLY):
+[
   {
-    "title": "Short title here?",
-    "explanation": "Explanation here."
+    "question": "Your question here?",
+    "answer": "Your detailed answer here."
   }
+]
 
+RULES:
+- Output ONLY the JSON array, nothing else
+- No markdown code blocks
+- No explanations before or after
+- Ensure all quotes are properly escaped
+- All strings must use double quotes
+- NO trailing commas`;
 
-  Important: Do NOT add any extra text outside the JSON format. Only return valid JSON.
-  `;
+const conceptExplainPrompt = (question) => `You are an expert AI that generates concept explanations in STRICT JSON format ONLY.
+
+CRITICAL: Output ONLY valid JSON object. NO explanations, NO markdown, NO extra text before or after.
+
+Explain this interview question and concept in depth:
+"${question}"
+
+Provide:
+1. A short, clear title summarizing the concept
+2. A detailed explanation suitable for beginners
+3. Include code examples if relevant
+
+OUTPUT FORMAT (VALID JSON OBJECT ONLY):
+{
+  "title": "Concept Title Here",
+  "explanation": "Your detailed explanation here."
+}
+
+RULES:
+- Output ONLY the JSON object, nothing else
+- No markdown code blocks
+- No explanations before or after
+- Ensure all quotes are properly escaped
+- All strings must use double quotes
+- Keep explanation clear but comprehensive`;
 
 module.exports = { questionAnswerPrompt, conceptExplainPrompt };
