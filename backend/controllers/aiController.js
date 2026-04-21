@@ -23,11 +23,8 @@ const withTimeout = (promise, ms) => {
 
 // Helper function to extract and parse JSON from text
 const parseJsonResponse = (text) => {
-  if (!text) {
-    throw new Error("Empty response from AI");
-  }
+  if (!text) throw new Error("Empty response from AI");
 
-  // Remove markdown code blocks
   let cleanedText = text
     .replace(/^```(?:json)?\s*/gm, "")
     .replace(/```\s*$/gm, "")
@@ -35,78 +32,84 @@ const parseJsonResponse = (text) => {
 
   try {
     return JSON.parse(cleanedText);
-  } catch (directParseError) {
+  } catch (_) {
     console.log("Direct parse failed, attempting to extract JSON...");
   }
 
-  // Try to find array first (for questions)
   const arrayMatch = cleanedText.match(/\[\s*\{[\s\S]*?\}\s*(?:,\s*\{[\s\S]*?\}\s*)*\]/);
   if (arrayMatch) {
-    try {
-      return JSON.parse(arrayMatch[0]);
-    } catch (_) {}
+    try { return JSON.parse(arrayMatch[0]); } catch (_) {}
   }
 
-  // Try to find object (for explanations)
-  const objectMatch = cleanedText.match(/\{\s*"[\s\S]*?\s*\}/);
+  const objectMatch = cleanedText.match(/\{[\s\S]*\}/);
   if (objectMatch) {
-    try {
-      return JSON.parse(objectMatch[0]);
-    } catch (_) {}
+    try { return JSON.parse(objectMatch[0]); } catch (_) {}
   }
 
-  console.error("Could not extract valid JSON from response:", cleanedText.substring(0, 500));
-  throw new Error(`Could not extract valid JSON from AI response. Response: ${cleanedText.substring(0, 200)}`);
+  throw new Error(`Could not extract valid JSON from AI response. Preview: ${cleanedText.substring(0, 200)}`);
 };
 
 // Helper to check for blocked content
 const checkResponseValidity = (result) => {
   if (!result) throw new Error("No result from API");
-
   if (result.promptFeedback?.blockReason) {
     throw new Error(`Request blocked by Google: ${result.promptFeedback.blockReason}`);
   }
-
   if (!result.candidates || result.candidates.length === 0) {
     throw new Error("No candidates in response - possible content filter");
   }
-
   const candidate = result.candidates[0];
-
   if (candidate.finishReason && candidate.finishReason !== "STOP") {
-    throw new Error(`Response incomplete (finishReason: ${candidate.finishReason}).`);
+    throw new Error(`Response incomplete (finishReason: ${candidate.finishReason})`);
   }
-
-  if (candidate.content?.parts?.length === 0) {
-    throw new Error("Response content is empty (possibly blocked by safety filters)");
-  }
-
   return true;
 };
 
-// Ordered list of current, available Gemini models to try
+const isQuotaError = (err) =>
+  err.message.includes("429") ||
+  err.message.includes("quota") ||
+  err.message.includes("Too Many Requests");
+
+const isNotFoundError = (err) =>
+  err.message.includes("404") || err.message.includes("not found");
+
+// Current stable model strings for @google/generative-ai SDK (v1beta)
 const GEMINI_MODELS = [
   "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
+  "gemini-2.0-flash-lite",
+  "gemini-1.5-flash-latest",
+  "gemini-1.5-pro-latest",
 ];
 
-// Returns a working model instance
-const getWorkingModel = async (aiInstance) => {
+// Tries each model in order with the real prompt — no wasted probe requests
+const generateWithFallback = async (aiInstance, prompt) => {
+  let lastError;
+
   for (const modelName of GEMINI_MODELS) {
     try {
       console.log(`Trying model: ${modelName}`);
       const model = aiInstance.getGenerativeModel({ model: modelName });
-      // Quick probe to confirm availability
-      await withTimeout(model.generateContent("ping"), 8000);
-      console.log(`✓ Using model: ${modelName}`);
-      return model;
+      const result = await withTimeout(model.generateContent(prompt), 30000);
+      console.log(`✓ Success with model: ${modelName}`);
+      return result;
     } catch (err) {
-      console.log(`✗ ${modelName} unavailable: ${err.message}`);
+      console.log(`✗ ${modelName} failed: ${err.message.split("\n")[0]}`);
+      lastError = err;
+      if (isQuotaError(err) || isNotFoundError(err)) continue;
+      throw err; // non-recoverable error — stop immediately
     }
   }
+
+  if (isQuotaError(lastError)) {
+    throw new Error(
+      "All Gemini models have exceeded their free-tier quota for today. " +
+      "Please wait until quota resets (midnight Pacific Time) or upgrade your Google AI plan at https://aistudio.google.com/apikey"
+    );
+  }
+
   throw new Error(
-    "No suitable Gemini model found. Check your API key permissions at https://aistudio.google.com/apikey"
+    `No suitable Gemini model found. Last error: ${lastError?.message}. ` +
+    "Check your API key at https://aistudio.google.com/apikey"
   );
 };
 
@@ -136,15 +139,10 @@ const generateInterviewQuestions = async (req, res) => {
     const prompt = questionAnswerPrompt(role, experience, topicsToFocus, numberOfQuestions);
     console.log("Generated prompt length:", prompt.length);
 
-    const model = await getWorkingModel(aiInstance);
-    const result = await withTimeout(model.generateContent(prompt), 30000);
-
-    console.log("Response received:", result ? "Yes" : "No");
+    const result = await generateWithFallback(aiInstance, prompt);
     checkResponseValidity(result);
 
-    if (!result.response) {
-      throw new Error("No response from AI model");
-    }
+    if (!result.response) throw new Error("No response from AI model");
 
     const rawText = result.response.text();
     console.log("Raw text length:", rawText.length);
@@ -164,8 +162,11 @@ const generateInterviewQuestions = async (req, res) => {
     console.error("Error type:", error.constructor.name);
     console.error("Error message:", error.message);
 
-    res.status(500).json({
-      message: "Failed to generate questions",
+    const quota = isQuotaError(error);
+    res.status(quota ? 429 : 500).json({
+      message: quota
+        ? "AI quota exceeded. Please try again later or upgrade your Google AI plan."
+        : "Failed to generate questions",
       error: error.message,
       details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
@@ -198,15 +199,10 @@ const generateConceptExplanation = async (req, res) => {
     const prompt = conceptExplainPrompt(question);
     console.log("Generated prompt length:", prompt.length);
 
-    const model = await getWorkingModel(aiInstance);
-    const result = await withTimeout(model.generateContent(prompt), 30000);
-
-    console.log("Response received:", result ? "Yes" : "No");
+    const result = await generateWithFallback(aiInstance, prompt);
     checkResponseValidity(result);
 
-    if (!result.response) {
-      throw new Error("No response from AI model");
-    }
+    if (!result.response) throw new Error("No response from AI model");
 
     const rawText = result.response.text();
     console.log("Raw text length:", rawText.length);
@@ -225,8 +221,11 @@ const generateConceptExplanation = async (req, res) => {
     console.error("Error type:", error.constructor.name);
     console.error("Error message:", error.message);
 
-    res.status(500).json({
-      message: "Failed to generate explanation",
+    const quota = isQuotaError(error);
+    res.status(quota ? 429 : 500).json({
+      message: quota
+        ? "AI quota exceeded. Please try again later or upgrade your Google AI plan."
+        : "Failed to generate explanation",
       error: error.message,
       details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
