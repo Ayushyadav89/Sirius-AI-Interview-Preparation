@@ -165,12 +165,9 @@ const generateInterviewQuestions = async (req, res) => {
         model = aiInstance.getGenerativeModel({ model: modelName });
         result = await withTimeout(model.generateContent(prompt), 30000);
       } else {
-        throw timeoutError;
+        console.error("Gemini API call timeout or failed:", timeoutError.message);
+        throw new Error(`Gemini API error: ${timeoutError.message}`);
       }
-    }
-    } catch (timeoutError) {
-      console.error("Gemini API call timeout or failed:", timeoutError.message);
-      throw new Error(`Gemini API error: ${timeoutError.message}`);
     }
     
     console.log("Response received:", result ? "Yes" : "No");
@@ -281,12 +278,9 @@ const generateConceptExplanation = async (req, res) => {
         model = aiInstance.getGenerativeModel({ model: modelName });
         result = await withTimeout(model.generateContent(prompt), 30000);
       } else {
-        throw timeoutError;
+        console.error("Gemini API call timeout or failed:", timeoutError.message);
+        throw new Error(`Gemini API error: ${timeoutError.message}`);
       }
-    }
-    } catch (timeoutError) {
-      console.error("Gemini API call timeout or failed:", timeoutError.message);
-      throw new Error(`Gemini API error: ${timeoutError.message}`);
     }
     
     console.log("Response received:", result ? "Yes" : "No");
