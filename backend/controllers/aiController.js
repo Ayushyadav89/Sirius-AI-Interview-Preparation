@@ -141,17 +141,33 @@ const generateInterviewQuestions = async (req, res) => {
 
     // Try gemini-2.0-flash-exp first, fallback to gemini-pro if not available
     let model;
+    let modelName = "gemini-2.0-flash-exp";
+    
     try {
-      model = aiInstance.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+      model = aiInstance.getGenerativeModel({ model: modelName });
+      // Try to get a response to test if model is available
+      console.log("Attempting to use", modelName);
     } catch (modelError) {
-      console.log("gemini-2.0-flash-exp not available, using gemini-pro");
-      model = aiInstance.getGenerativeModel({ model: "gemini-pro" });
+      console.log(`${modelName} not available, switching to gemini-pro`);
+      modelName = "gemini-pro";
+      model = aiInstance.getGenerativeModel({ model: modelName });
     }
-    console.log("Model initialized");
+    console.log("Model initialized:", modelName);
 
     let result;
     try {
       result = await withTimeout(model.generateContent(prompt), 30000);
+    } catch (timeoutError) {
+      // If model not found, try gemini-pro as fallback
+      if (timeoutError.message.includes("not found") && modelName !== "gemini-pro") {
+        console.log(`${modelName} failed, trying gemini-pro...`);
+        modelName = "gemini-pro";
+        model = aiInstance.getGenerativeModel({ model: modelName });
+        result = await withTimeout(model.generateContent(prompt), 30000);
+      } else {
+        throw timeoutError;
+      }
+    }
     } catch (timeoutError) {
       console.error("Gemini API call timeout or failed:", timeoutError.message);
       throw new Error(`Gemini API error: ${timeoutError.message}`);
@@ -243,16 +259,31 @@ const generateConceptExplanation = async (req, res) => {
 
     // Try gemini-2.0-flash-exp first, fallback to gemini-pro if not available
     let model;
+    let modelName = "gemini-2.0-flash-exp";
+    
     try {
-      model = aiInstance.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+      model = aiInstance.getGenerativeModel({ model: modelName });
+      console.log("Attempting to use", modelName);
     } catch (modelError) {
-      console.log("gemini-2.0-flash-exp not available, using gemini-pro");
-      model = aiInstance.getGenerativeModel({ model: "gemini-pro" });
+      console.log(`${modelName} not available, switching to gemini-pro`);
+      modelName = "gemini-pro";
+      model = aiInstance.getGenerativeModel({ model: modelName });
     }
 
     let result;
     try {
       result = await withTimeout(model.generateContent(prompt), 30000);
+    } catch (timeoutError) {
+      // If model not found, try gemini-pro as fallback
+      if (timeoutError.message.includes("not found") && modelName !== "gemini-pro") {
+        console.log(`${modelName} failed, trying gemini-pro...`);
+        modelName = "gemini-pro";
+        model = aiInstance.getGenerativeModel({ model: modelName });
+        result = await withTimeout(model.generateContent(prompt), 30000);
+      } else {
+        throw timeoutError;
+      }
+    }
     } catch (timeoutError) {
       console.error("Gemini API call timeout or failed:", timeoutError.message);
       throw new Error(`Gemini API error: ${timeoutError.message}`);
