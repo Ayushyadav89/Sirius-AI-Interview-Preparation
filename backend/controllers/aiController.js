@@ -139,7 +139,14 @@ const generateInterviewQuestions = async (req, res) => {
     );
     console.log("Generated prompt length:", prompt.length);
 
-    const model = aiInstance.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Try gemini-2.0-flash-exp first, fallback to gemini-pro if not available
+    let model;
+    try {
+      model = aiInstance.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    } catch (modelError) {
+      console.log("gemini-2.0-flash-exp not available, using gemini-pro");
+      model = aiInstance.getGenerativeModel({ model: "gemini-pro" });
+    }
     console.log("Model initialized");
 
     let result;
@@ -234,7 +241,14 @@ const generateConceptExplanation = async (req, res) => {
     const prompt = conceptExplainPrompt(question);
     console.log("Generated prompt length:", prompt.length);
 
-    const model = aiInstance.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Try gemini-2.0-flash-exp first, fallback to gemini-pro if not available
+    let model;
+    try {
+      model = aiInstance.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    } catch (modelError) {
+      console.log("gemini-2.0-flash-exp not available, using gemini-pro");
+      model = aiInstance.getGenerativeModel({ model: "gemini-pro" });
+    }
 
     let result;
     try {
