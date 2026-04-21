@@ -39,33 +39,23 @@ const parseJsonResponse = (text) => {
   throw new Error(`Could not extract valid JSON from AI response. Preview: ${cleanedText.substring(0, 200)}`);
 };
 
-// Call Claude API via fetch — no SDK dependency needed
-const callClaude = async (prompt) => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
+// Call Gemini (Google Generative AI) via SDK
+const callGemini = async (prompt) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001", // fast and cost-effective
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
+  const { GoogleGenerativeAI } = require("@google/generative-ai");
+  const client = new GoogleGenerativeAI(apiKey);
+  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`Claude API error ${response.status}: ${errBody}`);
-  }
+  const result = await model.generateContent(prompt);
 
-  const data = await response.json();
-  const text = data.content?.find((b) => b.type === "text")?.text;
-  if (!text) throw new Error("No text content in Claude response");
+  // SDK responses may expose a response.text() helper
+  const text = result?.response && typeof result.response.text === "function"
+    ? result.response.text()
+    : (result?.response?.text || "");
+
+  if (!text) throw new Error("No text content in Gemini response");
   return text;
 };
 
@@ -76,8 +66,8 @@ const generateInterviewQuestions = async (req, res) => {
   try {
     console.log("=== Generate Questions Request ===");
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({ message: "AI service not configured. Set ANTHROPIC_API_KEY in environment variables." });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ message: "AI service not configured. Set GEMINI_API_KEY in environment variables." });
     }
 
     const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
@@ -90,7 +80,7 @@ const generateInterviewQuestions = async (req, res) => {
     const prompt = questionAnswerPrompt(role, experience, topicsToFocus, numberOfQuestions);
     console.log("Generated prompt length:", prompt.length);
 
-    const rawText = await withTimeout(callClaude(prompt), 30000);
+    const rawText = await withTimeout(callGemini(prompt), 30000);
     console.log("Raw text length:", rawText.length);
 
     const data = parseJsonResponse(rawText);
@@ -130,14 +120,14 @@ const generateConceptExplanation = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({ message: "AI service not configured. Set ANTHROPIC_API_KEY in environment variables." });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ message: "AI service not configured. Set GEMINI_API_KEY in environment variables." });
     }
 
     const prompt = conceptExplainPrompt(question);
     console.log("Generated prompt length:", prompt.length);
 
-    const rawText = await withTimeout(callClaude(prompt), 30000);
+    const rawText = await withTimeout(callGemini(prompt), 30000);
     console.log("Raw text length:", rawText.length);
 
     const data = parseJsonResponse(rawText);
