@@ -42,34 +42,47 @@ const parseJsonResponse = (text) => {
 // Call Gemini (Google Generative AI) via SDK
 const callGemini = async (prompt) => {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured. Set GEMINI_API_KEY in your environment.");
 
   const { GoogleGenerativeAI } = require("@google/generative-ai");
   const client = new GoogleGenerativeAI(apiKey);
 
-  // Allow overriding model via env, otherwise try common model names until one works
+  // Choose model: prefer GEMINI_MODEL env, otherwise default to a modern Gemini model
   const preferred = process.env.GEMINI_MODEL;
-  const candidates = (preferred ? [preferred] : []).concat([
-    "gemini-1.5-flash",
-    "gemini-1.5",
-    "gemini-1.0",
-    "models/gemini-1.5-flash",
-    "models/gemini-1.5",
-  ]);
+  const defaultCandidates = ["gemini-1.5-flash", "gemini-1.5", "gemini-1.0", "models/gemini-1.5-flash", "models/gemini-1.5"];
+  const candidates = (preferred ? [preferred] : []).concat(defaultCandidates);
 
   let lastError = null;
 
+  // Helper to attempt calling a model using common SDK methods
+  const tryCall = async (modelInstance) => {
+    // Try generateContent (used by some SDK versions)
+    if (typeof modelInstance.generateContent === "function") {
+      return await modelInstance.generateContent(prompt);
+    }
+    // Try generate with a simple input shape (some SDKs use { input })
+    if (typeof modelInstance.generate === "function") {
+      try {
+        return await modelInstance.generate({ input: prompt });
+      } catch (e) {
+        // fallback to other signature
+        return await modelInstance.generate({ prompt });
+      }
+    }
+    throw new Error("Model instance exposes no supported generate method");
+  };
+
+  // Try candidate list first
   for (const name of candidates) {
     try {
       const model = client.getGenerativeModel({ model: name });
-      const result = await model.generateContent(prompt);
+      const result = await tryCall(model);
 
       const text = result?.response && typeof result.response.text === "function"
         ? result.response.text()
         : (result?.response?.text || "");
 
       if (text && text.trim()) return text;
-      // If empty, keep trying other candidates
       lastError = new Error(`Empty response from model ${name}`);
     } catch (err) {
       lastError = err;
@@ -77,12 +90,11 @@ const callGemini = async (prompt) => {
       // try next candidate
     }
   }
-  // If none of the candidate models worked, query available models and try one that supports generateContent
+
+  // If no candidate worked, list available models and pick one that supports generate or generateContent
   try {
     const listResp = await client.listModels();
     const models = listResp?.models || listResp?.model || listResp || [];
-
-    // normalize to array of objects with id/name
     const modelInfos = Array.isArray(models) ? models : Object.values(models || {});
 
     const available = [];
@@ -96,27 +108,24 @@ const callGemini = async (prompt) => {
       available.push({ id, supportsGenerate, raw: m });
     }
 
-    // prefer any model that declares support for generateContent
     const pick = available.find((a) => a.supportsGenerate) || available[0];
     if (pick) {
       try {
         const model = client.getGenerativeModel({ model: pick.id });
-        const result = await model.generateContent(prompt);
+        const result = await tryCall(model);
         const text = result?.response && typeof result.response.text === 'function'
           ? result.response.text()
           : (result?.response?.text || '');
         if (text && text.trim()) return text;
       } catch (err) {
         lastError = err;
+        console.error(`Picked model ${pick.id} failed:`, err && err.message ? err.message : err);
       }
     }
 
     const names = available.map((a) => `${a.id}${a.supportsGenerate ? ' (supports generateContent)' : ''}`);
-    throw new Error(
-      `No usable Gemini model found. Tried candidates and listModels results. Available models: ${names.slice(0,20).join(', ')}`
-    );
+    throw new Error(`No usable Gemini model found. Available models: ${names.slice(0,20).join(', ')}`);
   } catch (err) {
-    // Prefer the last SDK error if present, otherwise the listModels error
     throw lastError || err || new Error('No available Gemini model produced output');
   }
 };
