@@ -50,53 +50,26 @@ const callGemini = async (prompt) => {
   const { GoogleGenerativeAI } = require("@google/generative-ai");
   const client = new GoogleGenerativeAI(apiKey);
 
-  // List models and pick a usable one (prefer GEMINI_MODEL env if set)
-  const listResp = await client.listModels();
-  const models = listResp?.models || listResp || [];
-  const modelInfos = Array.isArray(models) ? models : Object.values(models || {});
+  // Require the deploying environment to specify a model id via GEMINI_MODEL.
+  // Many SDK/account combinations don't expose listModels in the same way,
+  // so prefer an explicit model id to avoid runtime failures.
+  const modelId = process.env.GEMINI_MODEL;
+  if (!modelId) throw new Error("GEMINI_MODEL is not set. Please set GEMINI_MODEL to a valid model id (e.g. gemini-1.5 or gemini-1.5-flash) in the environment.");
 
-  const preferred = process.env.GEMINI_MODEL;
-  let pick = null;
+  const model = client.getGenerativeModel({ model: modelId });
 
-  // find preferred in list
-  if (preferred) {
-    pick = modelInfos.find((m) => (m?.name || m?.id || m?.model || '') === preferred || (typeof m === 'string' && m === preferred));
-  }
-
-  // otherwise pick first model that declares generate or generateContent support
-  if (!pick) {
-    for (const m of modelInfos) {
-      const id = m?.name || m?.id || m?.model || (typeof m === 'string' ? m : undefined);
-      if (!id) continue;
-      const supported = m?.supportedMethods || m?.methods || m?.capabilities || [];
-      const supportsGenerate = Array.isArray(supported)
-        ? supported.includes('generateContent') || supported.includes('generate')
-        : false;
-      if (supportsGenerate || /gemini|bison|chat/i.test(id)) {
-        pick = m;
-        break;
-      }
-    }
-  }
-
-  if (!pick) throw new Error('No Gemini-like model found via listModels. Ensure your API key has access to Generative models.');
-
-  const id = pick?.name || pick?.id || pick?.model || (typeof pick === 'string' ? pick : undefined);
-  const model = client.getGenerativeModel({ model: id });
-
-  // Try common invocation shapes
+  // Try common invocation shapes supported by SDKs
   let result;
-  if (typeof model.generateContent === 'function') {
+  if (typeof model.generateContent === "function") {
     result = await model.generateContent(prompt);
-  } else if (typeof model.generate === 'function') {
-    // some SDKs expect an object
+  } else if (typeof model.generate === "function") {
     try {
       result = await model.generate({ input: prompt });
     } catch (_) {
       result = await model.generate({ prompt });
     }
   } else {
-    throw new Error(`Selected model (${id}) exposes no supported generate method.`);
+    throw new Error(`Selected model (${modelId}) exposes no supported generate method.`);
   }
 
   const text = result?.response && typeof result.response.text === 'function'
