@@ -55,9 +55,6 @@ const callGemini = async (prompt) => {
     "gemini-1.0",
     "models/gemini-1.5-flash",
     "models/gemini-1.5",
-    "text-bison-001",
-    "chat-bison",
-    "models/text-bison-001",
   ]);
 
   let lastError = null;
@@ -76,6 +73,7 @@ const callGemini = async (prompt) => {
       lastError = new Error(`Empty response from model ${name}`);
     } catch (err) {
       lastError = err;
+      console.error(`Model ${name} failed:`, err && err.message ? err.message : err);
       // try next candidate
     }
   }
