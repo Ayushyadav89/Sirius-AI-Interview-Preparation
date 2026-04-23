@@ -50,7 +50,6 @@ const callGemini = async (prompt) => {
   const { GoogleGenerativeAI } = require("@google/generative-ai");
   const client = new GoogleGenerativeAI(apiKey);
 
-<<<<<<< HEAD
   const candidates = process.env.GEMINI_MODEL
     ? [process.env.GEMINI_MODEL]
     : ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
@@ -86,7 +85,6 @@ const callGemini = async (prompt) => {
     }
   }
   throw lastError;
-=======
   // Require the deploying environment to specify a model id via GEMINI_MODEL.
   // Many SDK/account combinations don't expose listModels in the same way,
   // so prefer an explicit model id to avoid runtime failures.
@@ -114,7 +112,6 @@ const callGemini = async (prompt) => {
     : (result?.response?.text || '');
 
   return text;
->>>>>>> fe8e298df4f1a6cc92070a163d06684d8f12ce8a
 };
 
 // @desc Generate interview questions and answers using Gemini
