@@ -116,5 +116,13 @@ app.use("/uploads" , express.static(path.join(__dirname , "uploads"), {}));
 
 // start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT , () => console.log(`Server running on port ${PORT}`));  
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("❌ GEMINI_API_KEY is missing in .env");
+  } else {
+    console.log(`🔑 GEMINI_API_KEY loaded: ${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`);
+  }
+});
 

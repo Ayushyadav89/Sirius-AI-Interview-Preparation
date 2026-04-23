@@ -50,6 +50,43 @@ const callGemini = async (prompt) => {
   const { GoogleGenerativeAI } = require("@google/generative-ai");
   const client = new GoogleGenerativeAI(apiKey);
 
+<<<<<<< HEAD
+  const candidates = process.env.GEMINI_MODEL
+    ? [process.env.GEMINI_MODEL]
+    : ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+
+  const is503 = (err) => err?.message?.includes("503") || err?.message?.includes("Service Unavailable");
+
+  let lastError;
+  for (const modelName of candidates) {
+    // try each model up to 2 times if it returns 503 (temporary overload)
+    const attempts = 2;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        console.log(`Trying Gemini model: ${modelName} (attempt ${attempt})`);
+        const model = client.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(prompt);
+        const text =
+          result?.response && typeof result.response.text === "function"
+            ? result.response.text()
+            : result?.response?.text || "";
+        if (text && text.trim()) return text;
+        lastError = new Error(`Empty response from model: ${modelName}`);
+        break;
+      } catch (err) {
+        lastError = err;
+        if (is503(err) && attempt < attempts) {
+          console.warn(`Model ${modelName} returned 503, retrying in 5s...`);
+          await new Promise((r) => setTimeout(r, 5000));
+        } else {
+          console.error(`Model ${modelName} failed:`, err.message);
+          break;
+        }
+      }
+    }
+  }
+  throw lastError;
+=======
   // Require the deploying environment to specify a model id via GEMINI_MODEL.
   // Many SDK/account combinations don't expose listModels in the same way,
   // so prefer an explicit model id to avoid runtime failures.
@@ -77,6 +114,7 @@ const callGemini = async (prompt) => {
     : (result?.response?.text || '');
 
   return text;
+>>>>>>> fe8e298df4f1a6cc92070a163d06684d8f12ce8a
 };
 
 // @desc Generate interview questions and answers using Gemini
