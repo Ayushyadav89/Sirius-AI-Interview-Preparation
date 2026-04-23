@@ -150,7 +150,7 @@ const LandingPage = () => {
         </div>
 
         <div className="text-sm bg-gray-50 text-secondary text-center p-5 mt-5">
-          © 2025 Sirius | Created By ❤️ by Ayush Yadav
+          © 2026 copyright Ava Learn. All rights reserved.
         </div>
       </div>
 
