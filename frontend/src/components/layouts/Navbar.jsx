@@ -9,7 +9,7 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
         <Link to="/dashboard">
           <h2 className="text-lg md:text-xl font-medium text-black leading-5">
-            Ava Learn
+            Sirius AI
           </h2>
         </Link>
         <ProfileInfoCard />
